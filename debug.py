@@ -150,6 +150,9 @@ def generate_search():
             i,
         )
 
+from huggingface_hub import login
+token = os.getenv("HF_TOKEN")
+login(token=token)
 
 generate_search()
 

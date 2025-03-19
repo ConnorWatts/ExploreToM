@@ -1,0 +1,7 @@
+pandas 
+openai
+requests
+dill
+matplotlib
+transformers
+bitsandbytes

@@ -10,6 +10,7 @@ import re
 import time
 import json
 import openai
+import torch
 import pandas as pd
 from belief_tracker import QuestionGenerator
 
@@ -155,8 +156,10 @@ class ModelCallHandler:
         self.model = AutoModelForCausalLM.from_pretrained(
             self.model_name,
             quantization_config=nf4_config,
-            attn_implementation="flash_attention_2",
-            cache_dir=cache_dir,
+            device_map="cuda:0",
+            #attn_implementation="flash_attention_2",
+            #rope_scaling={"type": "dynamic", "factor": 8.0},  # Correct format
+            #cache_dir=cache_dir,
         )
 
     def call_vllm_python_model(self, message_list, top_p, temperature, **kwargs):
@@ -207,7 +210,7 @@ class ModelCallHandler:
     ):
         input_ids = self.tokenizer.apply_chat_template(
             message_list, add_generation_prompt=True, return_tensors="pt"
-        ).to(model.device)
+        ).to("cuda")
         terminators = [
             self.tokenizer.eos_token_id,
             self.tokenizer.convert_tokens_to_ids("<|eot_id|>"),
@@ -230,7 +233,7 @@ class ModelCallHandler:
                 eos_token_id=terminators,
                 do_sample=False,
                 top_p=top_p,
-                pad_token_id=tokenizer.eos_token_id,
+                pad_token_id=self.tokenizer.eos_token_id,
             )
         response = outputs[0][input_ids.shape[-1] :]
         decoded_response = self.tokenizer.decode(response, skip_special_tokens=True)

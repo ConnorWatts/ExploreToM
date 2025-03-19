@@ -20,7 +20,7 @@ from utils import ModelCallHandler, ModelAnswerEvaluator, _dump_dict_list_to_jso
 from belief_tracker import FullBeliefTracker, QuestionGenerator
 
 
-def _setup_config_for_action_sampling(interaction_types_included):
+def _setup_config_for_action_sampling(interaction_types_included, num_rooms):
     differentiating_actions = []
     if interaction_types_included in ["tomi", "tomi+asymmetric"]:
         all_allowed_actions = [
@@ -251,7 +251,7 @@ class ChallengingStoryStructureSearcher:
             differentiating_actions,
             all_allowed_actions,
             world_building_actions,
-        ) = _setup_config_for_action_sampling(interaction_types_included)
+        ) = _setup_config_for_action_sampling(interaction_types_included, num_rooms)
         self.differentiating_actions = differentiating_actions
         self.all_allowed_actions = all_allowed_actions
         self.world_building_actions = world_building_actions
@@ -1916,8 +1916,117 @@ class FullStoryStructureSearcher:
         )
 
 
+
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
+    from story_structure_searcher import FullStoryStructureSearcher
+
+    MODEL_NAME = "meta-llama/Llama-3.1-8B-Instruct"
+    MODEL_ACCESS_METHOD = "huggingface-4bit"
+
+    GROUP_N_NEXT_STEPS = 3
+    A_STAR_G_VERSION = "acc"
+    A_STAR_H_VERSION = "intstory_w_people"
+    A_STAR_H_WEIGHT = 0.1
+    A_STAR_NEIGHBOUR_PRIORITY = "weight-goal4"
+    MAX_NEIGHBORS_TO_EXPLORE = "1_10-3_0.75-5_0.5"
+    MODEL_GENERATED_CONTEXTS_FILE = "logs/model_generated_contexts_gpt-4o_n_100_p_6_m_6_r_2_update_object_state_equiv_class.jsonl"
+    NUM_STORIES_BY_CONTEXT = 1
+    EXPERIMENT_TO_RUN = "search"
+    GENERALIZATION_TO_EXPLORE = "store_true"
+    BUDGET_PER_STORY = 50
+    NUM_STORIES_TOTAL = 10
+
+
+    model_call_handler = ModelCallHandler(MODEL_NAME, MODEL_ACCESS_METHOD)
+
+    all_story_types = [
+        "tomi",
+        "tomi+object-state",
+        "tomi-object-state",
+        "tomi+room-changes",
+        "fantom-private",
+        "fantom-public",
+        "tomi+info-exchange",
+        "allbutfantom",
+        "all",
+    ]
+    all_story_types.extend([a + "+asymmetric" for a in all_story_types])
+
+    VALID_STORY_GENERATION_TYPES = []
+    if GENERALIZATION_TO_EXPLORE:
+        for story_type in all_story_types:
+            for num_people in range(2, 7):
+                for num_moves in range(num_people, 11):
+                    for num_rooms in (
+                        [2] if "room" in story_type or "all" in story_type else [1]
+                    ):
+                        for max_sentences in [15]:
+                            VALID_STORY_GENERATION_TYPES.append(
+                                (
+                                    story_type,
+                                    num_people,
+                                    num_moves,
+                                    num_rooms,
+                                    max_sentences,
+                                )
+                            )
+    else:
+        for story_type in all_story_types:
+            for num_people in range(2, 5):
+                for num_moves in range(2, 5):
+                    for num_rooms in (
+                        [2] if "room" in story_type or "all" in story_type else [1]
+                    ):
+                        for max_sentences in [15]:
+                            VALID_STORY_GENERATION_TYPES.append(
+                                (
+                                    story_type,
+                                    num_people,
+                                    num_moves,
+                                    num_rooms,
+                                    max_sentences,
+                                )
+                            )
+    random.seed(0)
+    random.shuffle(VALID_STORY_GENERATION_TYPES)
+    random.seed(0)
+
+    full_searcher = FullStoryStructureSearcher(
+        model_call_handler,
+        group_n_next_steps=GROUP_N_NEXT_STEPS,
+        a_star_g_version=A_STAR_G_VERSION,
+        a_star_h_version=A_STAR_H_VERSION,
+        a_star_h_weight=A_STAR_H_WEIGHT,
+        a_star_neighbor_priority=A_STAR_NEIGHBOUR_PRIORITY,
+        max_neighbors_to_explore=MAX_NEIGHBORS_TO_EXPLORE,
+        model_generated_contexts_file=MODEL_GENERATED_CONTEXTS_FILE,
+        num_stories_by_context=NUM_STORIES_BY_CONTEXT,
+        experiment_to_run=EXPERIMENT_TO_RUN,
+        experiment_variations=[
+            "count_peeking_distracted_as_action"
+        ],  # , 'verify_final_story_for_state_updates'],
+        dir_to_write="logs_debug_dec4_fixed_restrictions",
+    )
+
+    for i, (story_type, num_people, num_moves, num_rooms, max_sentences) in enumerate(
+        VALID_STORY_GENERATION_TYPES
+    ):
+        #if (
+            #args.i is not None and i % NUM_PARALLEL != args.i % NUM_PARALLEL
+        #):  # DIY parallelization :)
+            #continue
+        full_searcher.main(
+            story_type,
+            num_people,
+            num_moves,
+            num_rooms,
+            max_sentences,
+            BUDGET_PER_STORY,
+            NUM_STORIES_TOTAL,
+            i,
+        )
+    """parser = argparse.ArgumentParser()
     parser.add_argument(
         "--model_name",
         type=str,
@@ -2047,4 +2156,4 @@ if __name__ == "__main__":
             args.budget_per_story,
             args.num_stories_total,
             i,
-        )
+        )"""
